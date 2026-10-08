@@ -1,0 +1,430 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tensorforge.example.com/schemas/batch_response.json",
+  "title": "BatchResponse",
+  "description": "Response of POST /predict/batch (200)",
+  "$ref": "#/$defs/BatchResponse",
+  "$defs": {
+    "BatchResponse": {
+      "type": "object",
+      "required": [
+        "predictions"
+      ],
+      "properties": {
+        "predictions": {
+          "type": "array",
+          "description": "One prediction per request item, in the same order.",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/PredictResponse"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "ticket_id"
+                ]
+              }
+            ]
+          }
+        },
+        "meta": {
+          "type": "object",
+          "description": "Optional batch-level information. Ignored by the scorer.",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "description": "Number of predictions returned. Must equal the number of tickets sent."
+            },
+            "model_version": {
+              "type": "string"
+            },
+            "processing_time_ms": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "Category": {
+      "type": "string",
+      "description": "Primary or secondary issue category.",
+      "enum": [
+        "payment_refund",
+        "ride_trip_issue",
+        "lost_item",
+        "order_missing_wrong",
+        "delivery_delay",
+        "food_quality",
+        "account_promo",
+        "safety_conduct",
+        "app_technical",
+        "general_inquiry",
+        "spam_irrelevant"
+      ]
+    },
+    "PredictResponse": {
+      "type": "object",
+      "required": [
+        "category",
+        "secondary_category",
+        "team",
+        "is_urgent",
+        "confidence",
+        "model_version"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "ticket_id": {
+          "type": "string",
+          "description": "Echoed from the request when provided."
+        },
+        "category": {
+          "$ref": "#/$defs/Category"
+        },
+        "secondary_category": {
+          "description": "Second issue if the ticket clearly contains two, otherwise `null`. Must differ from\n`category`. The key must always be present, with value `null` when there is none.\n",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Category"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "team": {
+          "$ref": "#/$defs/Team"
+        },
+        "is_urgent": {
+          "type": "boolean",
+          "description": "Whether the ticket needs immediate human attention."
+        },
+        "confidence": {
+          "type": "number",
+          "format": "float",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Confidence in the **primary** `category`, between 0 and 1. Used for calibration and\nabstention scoring, so it should reflect real uncertainty. Ambiguous and noisy\ntickets should receive lower values.\n"
+        },
+        "model_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Version of the model that produced the prediction. Must match a versioned artifact\nin the team's repository (for example a registry tag or file hash). Must be identical\nacross `/health`, `/predict` and `/predict/batch` for a given deployment.\n",
+          "examples": [
+            "v1.2"
+          ]
+        },
+        "needs_human_review": {
+          "type": "boolean",
+          "description": "Optional bonus field. `true` when the system would send the ticket to a human triage\nqueue instead of auto-routing it (for example, confidence below a chosen threshold).\nTeams that use it should explain the threshold in the README.\n"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "payment_refund"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Payments & Refunds"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "payment_refund"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "ride_trip_issue"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Ride Operations"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "ride_trip_issue"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "lost_item"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Lost & Found"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "lost_item"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "order_missing_wrong"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Food Operations"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "order_missing_wrong"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "delivery_delay"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Delivery Operations"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "delivery_delay"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "food_quality"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Restaurant Quality"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "food_quality"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "account_promo"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Account Services"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "account_promo"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "safety_conduct"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Trust & Safety"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "safety_conduct"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "app_technical"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Tech Support"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "app_technical"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "general_inquiry"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Front-line Support"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "general_inquiry"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "spam_irrelevant"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "team": {
+                "const": "Auto-close / Spam Filter"
+              },
+              "secondary_category": {
+                "not": {
+                  "const": "spam_irrelevant"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "category": {
+                "const": "spam_irrelevant"
+              }
+            },
+            "required": [
+              "category"
+            ]
+          },
+          "then": {
+            "properties": {
+              "is_urgent": {
+                "const": false
+              },
+              "secondary_category": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Team": {
+      "type": "string",
+      "description": "Support team, derived from `category` using the fixed table in the API description.",
+      "enum": [
+        "Payments & Refunds",
+        "Ride Operations",
+        "Lost & Found",
+        "Food Operations",
+        "Delivery Operations",
+        "Restaurant Quality",
+        "Account Services",
+        "Trust & Safety",
+        "Tech Support",
+        "Front-line Support",
+        "Auto-close / Spam Filter"
+      ]
+    }
+  }
+}

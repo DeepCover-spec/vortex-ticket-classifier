@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tensorforge.example.com/schemas/health_response.json",
+  "title": "HealthResponse",
+  "description": "Response of GET /health",
+  "$ref": "#/$defs/HealthResponse",
+  "$defs": {
+    "HealthResponse": {
+      "type": "object",
+      "required": [
+        "status",
+        "model_version"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "loading"
+          ]
+        },
+        "model_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Loaded model version, or `null` while loading."
+        },
+        "model_loaded": {
+          "type": "boolean",
+          "description": "Optional. `true` once the model is ready."
+        }
+      }
+    }
+  }
+}

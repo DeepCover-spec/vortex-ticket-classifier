@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tensorforge.example.com/schemas/predict_request.json",
+  "title": "PredictRequest",
+  "description": "Body of POST /predict",
+  "$ref": "#/$defs/PredictRequest",
+  "$defs": {
+    "Channel": {
+      "type": "string",
+      "description": "How the ticket arrived. This is an input field, not a label.",
+      "enum": [
+        "email",
+        "chat",
+        "call_transcript"
+      ]
+    },
+    "PredictRequest": {
+      "type": "object",
+      "required": [
+        "channel",
+        "text"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "ticket_id": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Optional identifier for `/predict` (required for `/predict/batch` and `/batch/jobs`). If provided, echo\nit back in the response. Do not use it as a model feature (IDs carry no signal and the\nharness uses opaque values).\n",
+          "examples": [
+            "TF-TE-000001"
+          ]
+        },
+        "channel": {
+          "$ref": "#/$defs/Channel"
+        },
+        "subject": {
+          "type": "string",
+          "maxLength": 500,
+          "default": "",
+          "description": "Email subject line. Empty string or omitted for chat and call transcripts."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10000,
+          "pattern": "\\S",
+          "description": "Ticket body, chat messages joined by newlines, or the call transcript. UTF-8.\nMust contain at least one non-whitespace character, otherwise return `422`.\nEmoji-only and mixed-script text is valid.\n"
+        }
+      }
+    }
+  }
+}

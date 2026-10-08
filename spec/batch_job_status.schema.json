@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tensorforge.example.com/schemas/batch_job_status.json",
+  "title": "BatchJobStatus",
+  "description": "Response of POST /batch/jobs (202) and GET /batch/jobs/{job_id}",
+  "$ref": "#/$defs/BatchJobStatus",
+  "$defs": {
+    "BatchJobStatus": {
+      "type": "object",
+      "required": [
+        "job_id",
+        "status",
+        "total",
+        "processed"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "description": "Number of tickets in the job."
+        },
+        "processed": {
+          "type": "integer",
+          "description": "Number of tickets classified so far. Never decreases."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "Set when the job reaches `succeeded`, `failed` or `cancelled`."
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "When results will be discarded. Set once the job finishes; at least 6 hours later."
+        },
+        "model_version": {
+          "type": "string"
+        },
+        "error": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Present only when `status` is `failed`.",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "examples": [
+                "interrupted"
+              ]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

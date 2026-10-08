@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tensorforge.example.com/schemas/error_response.json",
+  "title": "ErrorResponse",
+  "description": "Body of every 4xx / 503 error",
+  "$ref": "#/$defs/ErrorResponse",
+  "$defs": {
+    "ErrorResponse": {
+      "type": "object",
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "Short machine-readable code.",
+              "examples": [
+                "validation_error"
+              ]
+            },
+            "message": {
+              "type": "string",
+              "description": "Human-readable explanation. Do not include stack traces.",
+              "examples": [
+                "Field 'text' must contain at least one non-whitespace character."
+              ]
+            },
+            "details": {
+              "type": "array",
+              "description": "Optional list of field-level problems.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "index": {
+                    "type": "integer",
+                    "description": "Zero-based index of the failing item in `tickets` (batch requests only).",
+                    "examples": [
+                      3
+                    ]
+                  },
+                  "field": {
+                    "type": "string",
+                    "examples": [
+                      "text"
+                    ]
+                  },
+                  "issue": {
+                    "type": "string",
+                    "examples": [
+                      "must not be empty"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
