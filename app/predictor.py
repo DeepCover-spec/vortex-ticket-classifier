@@ -83,6 +83,13 @@ class TicketModel:
         self._cat = bundle["category"]
         self._sec = bundle["secondary"]
         self._urg = bundle["urgent"]
+        # Optional (P3 model): an uncalibrated head that picks the category label, while
+        # the calibrated `category` head only supplies the confidence. Older bundles
+        # without it fall back to the calibrated argmax.
+        self._cat_label = bundle.get("category_label")
+        # Optional: predict a secondary category when P("none") is below this. None keeps
+        # the original argmax rule.
+        self._sec_none_below = labels.get("secondary_none_threshold")
 
     def predict(self, texts: list[str], subjects: list[str] | None = None) -> list[dict]:
         """Classify tickets in order.
@@ -96,19 +103,30 @@ class TicketModel:
             return []
 
         proba = self._cat.predict_proba(inputs)
-        cats = self._cat.classes_[proba.argmax(1)]
-        confs = proba.max(1)
+        cat_classes = [str(c) for c in self._cat.classes_]
+        if self._cat_label is not None:
+            cats = [str(c) for c in self._cat_label.predict(inputs)]
+            confs = [proba[i, cat_classes.index(c)] if c in cat_classes else proba[i].max() for i, c in enumerate(cats)]
+        else:
+            cats = [cat_classes[j] for j in proba.argmax(1)]
+            confs = proba.max(1)
         sec_proba = self._sec.predict_proba(inputs)
-        sec_classes = self._sec.classes_
+        sec_classes = [str(c) for c in self._sec.classes_]
+        none_idx = sec_classes.index("none") if "none" in sec_classes else None
         urgent_pred = self._urg.predict(inputs)
 
         out = []
         for i, cat in enumerate(cats):
             cat = str(cat)
             sec = None
-            top = str(sec_classes[sec_proba[i].argmax()])
-            if top != "none" and top != cat:
-                sec = top
+            if self._sec_none_below is not None and none_idx is not None:
+                if sec_proba[i][none_idx] < float(self._sec_none_below):
+                    ranked = sorted(range(len(sec_classes)), key=lambda j: -sec_proba[i][j])
+                    sec = next((sec_classes[j] for j in ranked if j != none_idx and sec_classes[j] != cat), None)
+            else:
+                top = sec_classes[int(sec_proba[i].argmax())]
+                if top != "none" and top != cat:
+                    sec = top
             urgent = _as_bool(urgent_pred[i])
             if cat == "spam_irrelevant":
                 sec, urgent = None, False
