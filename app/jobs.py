@@ -18,7 +18,6 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from app.config import Settings
-from app.predictor import ticket_text
 from app.routing import finalize_prediction
 
 logger = logging.getLogger(__name__)
@@ -241,7 +240,7 @@ def run_job(app, job_id: str, tickets: list[dict]) -> None:
             if not store.still_running(job_id):
                 return
             chunk = tickets[start : start + store.settings.chunk_size]
-            raw = model.predict([ticket_text(t["subject"], t["text"]) for t in chunk])
+            raw = model.predict([t["text"] for t in chunk], [t["subject"] for t in chunk])
             if len(raw) != len(chunk):
                 raise RuntimeError("model returned a different number of predictions")
             predictions.extend(finalize_prediction(t, r, model.model_version) for t, r in zip(chunk, raw))

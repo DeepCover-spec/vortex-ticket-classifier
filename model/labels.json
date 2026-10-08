@@ -1,0 +1,39 @@
+{
+  "model_version": "p3-tfidf-e5900389",
+  "sklearn_version": "1.9.0",
+  "categories": [
+    "account_promo",
+    "app_technical",
+    "delivery_delay",
+    "food_quality",
+    "general_inquiry",
+    "lost_item",
+    "order_missing_wrong",
+    "payment_refund",
+    "ride_trip_issue",
+    "safety_conduct",
+    "spam_irrelevant"
+  ],
+  "category_to_team": {
+    "payment_refund": "Payments & Refunds",
+    "ride_trip_issue": "Ride Operations",
+    "lost_item": "Lost & Found",
+    "order_missing_wrong": "Food Operations",
+    "delivery_delay": "Delivery Operations",
+    "food_quality": "Restaurant Quality",
+    "account_promo": "Account Services",
+    "safety_conduct": "Trust & Safety",
+    "app_technical": "Tech Support",
+    "general_inquiry": "Front-line Support",
+    "spam_irrelevant": "Auto-close / Spam Filter"
+  },
+  "refit_on_train_plus_val": true,
+  "secondary_none_threshold": 0.65,
+  "validation_scores_fit_on_train": {
+    "macro_f1": 0.6888,
+    "accuracy": 0.6613,
+    "secondary_recall": 0.6,
+    "urgent_f1": 0.8919,
+    "ece": 0.0551
+  }
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.predictor import REVIEW_THRESHOLD
 from app.schemas import Category, Team
 
 CATEGORY_TO_TEAM: dict[str, str] = {
@@ -21,9 +22,6 @@ CATEGORY_TO_TEAM: dict[str, str] = {
     )
 }
 assert set(CATEGORY_TO_TEAM) == {category.value for category in Category}
-
-# Tickets below this confidence get needs_human_review=true (optional bonus field).
-REVIEW_THRESHOLD = 0.45
 
 
 def finalize_prediction(ticket: dict, raw: dict, model_version: str) -> dict:
