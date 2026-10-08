@@ -9,13 +9,17 @@ ENV/
 # Jupyter Notebooks
 .ipynb_checkpoints/
 
-# Model Files & Data
+# Model files: ignored by default, but the serving model in model/ is committed
 *.joblib
 *.pkl
 *.h5
 *.pt
 *.onnx
+!model/*.joblib
+!model/*.pkl
+!model/*.onnx
 data/
+.pytest_cache/
 
 # OS / IDE
 .DS_Store
