@@ -1,0 +1,13 @@
+.git
+.github
+.venv
+venv
+.env
+data
+tests
+training
+frontend
+spec
+**/__pycache__
+.pytest_cache
+*.md
