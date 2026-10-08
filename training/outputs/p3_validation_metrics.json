@@ -1,0 +1,28 @@
+{
+  "baseline-01": {
+    "macro_f1": 0.6731,
+    "accuracy": 0.6438,
+    "secondary_exact_accuracy": 0.955,
+    "secondary_recall": 0.55,
+    "secondary_false_positive_rate": 0.0,
+    "urgent_precision": 0.9706,
+    "urgent_recall": 0.825,
+    "urgent_f1": 0.8919,
+    "ece": 0.0632,
+    "confidence_auroc": 0.8302,
+    "mean_confidence": 0.6103
+  },
+  "p3-01": {
+    "macro_f1": 0.6888,
+    "accuracy": 0.6613,
+    "secondary_exact_accuracy": 0.9575,
+    "secondary_recall": 0.6,
+    "secondary_false_positive_rate": 0.0028,
+    "urgent_precision": 0.9706,
+    "urgent_recall": 0.825,
+    "urgent_f1": 0.8919,
+    "ece": 0.0551,
+    "confidence_auroc": 0.771,
+    "mean_confidence": 0.6484
+  }
+}

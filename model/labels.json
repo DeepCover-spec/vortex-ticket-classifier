@@ -1,5 +1,5 @@
 {
-  "model_version": "baseline-tfidf-22cd5e2d",
+  "model_version": "p3-tfidf-e5900389",
   "sklearn_version": "1.9.0",
   "categories": [
     "account_promo",
@@ -27,5 +27,13 @@
     "general_inquiry": "Front-line Support",
     "spam_irrelevant": "Auto-close / Spam Filter"
   },
-  "refit_on_train_plus_val": true
+  "refit_on_train_plus_val": true,
+  "secondary_none_threshold": 0.65,
+  "validation_scores_fit_on_train": {
+    "macro_f1": 0.6888,
+    "accuracy": 0.6613,
+    "secondary_recall": 0.6,
+    "urgent_f1": 0.8919,
+    "ece": 0.0551
+  }
 }
