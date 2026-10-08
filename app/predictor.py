@@ -1,57 +1,132 @@
-"""Model plug-in point (P2 hands over here).
+"""Serving entry point for the ticket model.
 
-Interface agreed in the team plan::
+P4 calls `predict`. Pass ticket bodies and, for emails, the subject lines.
+The dicts that come back are the model fields of the API response. P4 still
+adds `ticket_id` and enforces the API key.
 
-    predict(texts: list[str]) -> list[dict]
+    from app.predictor import predict, model_version
 
-Each dict has ``category`` and ``confidence`` (0 to 1). It may also carry
-``secondary_category`` (a category or None) and ``is_urgent`` (bool). ``team``
-is never predicted; the API looks it up from the fixed table.
+    rows = predict(texts, subjects)
 
-``ticket_text`` decides how one ticket becomes the string the model sees. Train
-on exactly the same function, or predictions will drift.
+Team is never predicted. It is looked up from the fixed table in
+`model/labels.json`. `spam_irrelevant` is forced to `is_urgent=False` and
+`secondary_category=None`, which is what the response schema requires.
 
-Drop the trained artifact at ``model/model.joblib``. Accepted shapes:
+The pickled pipelines call `app.textproc.clean_text` by name, so this module
+imports that function before loading the file.
 
-1. A dict::
-
-       {
-           "model_version": "v1",                 # shown in /health and every response
-           "category_model": <estimator>,         # required, predict(list[str])
-           "secondary_model": <estimator>,        # optional, labels or "none"
-           "urgent_model": <estimator>,           # optional, 0/1 or bool
-       }
-
-2. A bare estimator with ``predict(list[str])``. Only the category comes from
-   the model then. Urgency defaults to true for safety_conduct.
-
-Train with the scikit-learn, numpy and scipy versions pinned in requirements.txt
-or the file may not load inside the container.
-
-Without model/model.joblib a keyword stand-in answers so the API, Docker image
-and batch jobs can be tested. The stand-in is never the submitted model.
+The API loads the model once at startup through `load(model_dir)`. Without
+`model/model.joblib` it serves a keyword stand-in (version `stub-0.1`) so the
+service can still be tested. A model file that exists but fails to load stops
+the service from starting instead of falling back to the stand-in.
 """
-
 from __future__ import annotations
 
-import hashlib
+import json
 import logging
-import math
+import sys
+import warnings
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.textproc import build_input, clean_text  # noqa: E402
+
+MODEL_DIR = ROOT / "model"
+STUB_VERSION = "stub-0.1"
+
+# Tickets the category head is unsure about go to a human queue.
+# Emoji-only text landed near 0.31 on this model; the clearer samples sat above 0.50.
+REVIEW_THRESHOLD = 0.40
+
+# Imported for the unpickler. Do not remove.
+_ = clean_text
 
 logger = logging.getLogger(__name__)
 
-STUB_VERSION = "stub-0.1"
-_NO_LABEL = {"", "none", "null", "nan"}
+
+def _as_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes"}
+    return bool(value)
 
 
-def ticket_text(subject: str, text: str) -> str:
-    subject = (subject or "").strip()
-    return f"{subject}\n{text}" if subject else text
+def _subjects_for(texts: list[str], subjects: list[str] | None) -> list[str]:
+    if subjects is None:
+        return [""] * len(texts)
+    if len(subjects) != len(texts):
+        raise ValueError("subjects and texts must be the same length")
+    return subjects
+
+
+class TicketModel:
+    """The trained bundle in `model/`: category, secondary and urgent heads."""
+
+    def __init__(self, model_dir: Path = MODEL_DIR):
+        import joblib
+        import sklearn
+
+        labels = json.loads((model_dir / "labels.json").read_text(encoding="utf-8"))
+        fitted_with = str(labels.get("sklearn_version", ""))
+        if fitted_with and fitted_with != sklearn.__version__:
+            warnings.warn(
+                f"model.joblib was fit with scikit-learn {fitted_with}; "
+                f"this process has {sklearn.__version__}. "
+                "Pin the same version in the container or the file may not load.",
+                stacklevel=2,
+            )
+        bundle = joblib.load(model_dir / "model.joblib")
+        self.model_version = str(labels["model_version"])
+        self._team_of = labels["category_to_team"]
+        self._cat = bundle["category"]
+        self._sec = bundle["secondary"]
+        self._urg = bundle["urgent"]
+
+    def predict(self, texts: list[str], subjects: list[str] | None = None) -> list[dict]:
+        """Classify tickets in order.
+
+        `subjects` is optional and must be the same length as `texts` when given.
+        An empty subject is correct for chat and call transcripts.
+        """
+        subjects = _subjects_for(texts, subjects)
+        inputs = [build_input(subject, text) for subject, text in zip(subjects, texts)]
+        if not inputs:
+            return []
+
+        proba = self._cat.predict_proba(inputs)
+        cats = self._cat.classes_[proba.argmax(1)]
+        confs = proba.max(1)
+        sec_proba = self._sec.predict_proba(inputs)
+        sec_classes = self._sec.classes_
+        urgent_pred = self._urg.predict(inputs)
+
+        out = []
+        for i, cat in enumerate(cats):
+            cat = str(cat)
+            sec = None
+            top = str(sec_classes[sec_proba[i].argmax()])
+            if top != "none" and top != cat:
+                sec = top
+            urgent = _as_bool(urgent_pred[i])
+            if cat == "spam_irrelevant":
+                sec, urgent = None, False
+            confidence = round(float(min(1.0, max(0.0, confs[i]))), 4)
+            out.append({
+                "category": cat,
+                "secondary_category": sec,
+                "team": self._team_of[cat],
+                "is_urgent": urgent,
+                "confidence": confidence,
+                "model_version": self.model_version,
+                "needs_human_review": confidence < REVIEW_THRESHOLD,
+            })
+        return out
 
 
 class StubModel:
-    """Keyword stand-in used until a trained model is dropped in."""
+    """Keyword stand-in, used only when model/model.joblib is absent."""
 
     model_version = STUB_VERSION
 
@@ -70,8 +145,9 @@ class StubModel:
     )
     _URGENT = ("scared", "emergency", "insulin", "diabetic", "bleeding", "accident", "fraud", "not stopping")
 
-    def predict(self, texts: list[str]) -> list[dict]:
-        return [self._one(text.lower()) for text in texts]
+    def predict(self, texts: list[str], subjects: list[str] | None = None) -> list[dict]:
+        subjects = _subjects_for(texts, subjects)
+        return [self._one(build_input(s, t).lower()) for s, t in zip(subjects, texts)]
 
     def _one(self, text: str) -> dict:
         hits = [
@@ -92,96 +168,43 @@ class StubModel:
         }
 
 
-class SklearnModel:
-    def __init__(self, bundle: object, model_version: str):
-        self.model_version = model_version
-        if isinstance(bundle, dict):
-            self.category_model = bundle.get("category_model") or bundle.get("model")
-            self.secondary_model = bundle.get("secondary_model")
-            self.urgent_model = bundle.get("urgent_model")
-        else:
-            self.category_model, self.secondary_model, self.urgent_model = bundle, None, None
-        if not hasattr(self.category_model, "predict"):
-            raise ValueError("model.joblib has no category model with predict()")
-
-    def predict(self, texts: list[str]) -> list[dict]:
-        if not texts:
-            return []
-        categories = [str(label) for label in self.category_model.predict(texts)]
-        confidences = _confidence(self.category_model, texts, categories)
-        secondaries = _labels(self.secondary_model, texts)
-        urgent = _flags(self.urgent_model, texts)
-        return [
-            {
-                "category": category,
-                "secondary_category": secondaries[i] if secondaries else None,
-                "is_urgent": urgent[i] if urgent else category == "safety_conduct",
-                "confidence": confidences[i],
-            }
-            for i, category in enumerate(categories)
-        ]
-
-
-def _confidence(model: object, texts: list[str], predicted: list[str]) -> list[float]:
-    """Probability of the predicted class. Falls back to a softmax of SVM-style scores."""
-    classes = [str(c) for c in getattr(model, "classes_", [])]
-    if hasattr(model, "predict_proba"):
-        rows = model.predict_proba(texts)
-        return [_pick(row, classes, label) for row, label in zip(rows, predicted)]
-    if hasattr(model, "decision_function"):
-        rows = model.decision_function(texts)
-        out = []
-        for row, label in zip(rows, predicted):
-            scores = [float(s) for s in (row if hasattr(row, "__len__") else [-row, row])]
-            top = max(scores)
-            exps = [math.exp(s - top) for s in scores]
-            total = sum(exps)
-            out.append(_pick([e / total for e in exps], classes, label))
-        return out
-    return [0.5] * len(texts)
-
-
-def _pick(row, classes: list[str], label: str) -> float:
-    values = [float(v) for v in row]
-    if label in classes and len(classes) == len(values):
-        return values[classes.index(label)]
-    return max(values)
-
-
-def _labels(model: object | None, texts: list[str]) -> list[str | None] | None:
-    if model is None:
-        return None
-    return [None if label is None or str(label).strip().lower() in _NO_LABEL else str(label) for label in model.predict(texts)]
-
-
-def _flags(model: object | None, texts: list[str]) -> list[bool] | None:
-    if model is None:
-        return None
-    return [
-        str(label).strip().lower() in {"1", "true", "yes"} if isinstance(label, str) else bool(label)
-        for label in model.predict(texts)
-    ]
-
-
-def load(model_dir: Path) -> StubModel | SklearnModel:
-    """Load model/model.joblib, or the stand-in when it is absent.
-
-    A file that exists but fails to load raises: the service must not quietly
-    serve the stand-in in place of the real model.
-    """
-    path = model_dir / "model.joblib"
-    if not path.exists():
-        logger.warning("model/model.joblib not found; serving the keyword stand-in")
+def load(model_dir: Path = MODEL_DIR) -> TicketModel | StubModel:
+    """Load the trained model, or the stand-in when model.joblib is absent."""
+    if not (model_dir / "model.joblib").exists():
+        logger.warning("%s has no model.joblib; serving the keyword stand-in", model_dir)
         return StubModel()
-
-    import joblib
-
-    bundle = joblib.load(path)
-    version = bundle.get("model_version") if isinstance(bundle, dict) else None
-    if not version:
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        version = f"sha256-{digest[:12]}"
-    model = SklearnModel(bundle, str(version))
-    model.predict([ticket_text("", "warm-up")])
-    logger.info("loaded %s (version %s)", path, model.model_version)
+    model = TicketModel(model_dir)
+    model.predict(["warm-up"])
+    logger.info("loaded model %s from %s", model.model_version, model_dir)
     return model
+
+
+_default: TicketModel | None = None
+
+
+def _model() -> TicketModel:
+    global _default
+    if _default is None:
+        if not (MODEL_DIR / "model.joblib").exists():
+            raise FileNotFoundError(f"Missing model file: {MODEL_DIR / 'model.joblib'}")
+        _default = TicketModel(MODEL_DIR)
+    return _default
+
+
+def model_version() -> str:
+    """Version string shared by /health, /predict and /predict/batch."""
+    return _model().model_version
+
+
+def predict(texts: list[str], subjects: list[str] | None = None) -> list[dict]:
+    return _model().predict(texts, subjects)
+
+
+if __name__ == "__main__":
+    demo = predict(
+        ["කාර් එකේ මගේ බෑග් එක අමතක වුණා, ඩ්‍රයිවර්ට කතා කරන්න පුළුවන්ද?"],
+        [""],
+    )
+    print(model_version())
+    for key, value in demo[0].items():
+        print(f"{key}: {value}")

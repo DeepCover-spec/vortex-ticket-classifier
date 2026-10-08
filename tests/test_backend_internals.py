@@ -29,10 +29,10 @@ class HeldModel(StubModel):
         self.started = threading.Event()
         self.release = threading.Event()
 
-    def predict(self, texts):
+    def predict(self, texts, subjects=None):
         self.started.set()
         self.release.wait(10)
-        return super().predict(texts)
+        return super().predict(texts, subjects)
 
 
 def build(tmp_path, model=None, key=KEY):
@@ -155,22 +155,37 @@ def test_unset_api_key_refuses_everyone(tmp_path):
         assert client.get("/health").status_code == 200
 
 
-def test_trained_joblib_replaces_the_stub(tmp_path, validators):
-    joblib = pytest.importorskip("joblib")
+def test_trained_bundle_replaces_the_stub(tmp_path, validators):
+    """Same file layout P2 ships: category / secondary / urgent heads plus labels.json."""
+    import json
+
+    import joblib
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import make_pipeline
+
+    from app.routing import CATEGORY_TO_TEAM
+    from app.textproc import clean_text
 
     texts = ["refund my money please", "driver was rude and unsafe", "food arrived cold and stale",
              "my order is very late", "i left my phone in the car", "app crashes when i pay"] * 3
     labels = ["payment_refund", "safety_conduct", "food_quality",
               "delivery_delay", "lost_item", "app_technical"] * 3
-    category = make_pipeline(TfidfVectorizer(), LogisticRegression(max_iter=500)).fit(texts, labels)
-    urgent = make_pipeline(TfidfVectorizer(), LogisticRegression(max_iter=500)).fit(
-        texts, [int(label == "safety_conduct") for label in labels]
+
+    def head(y):
+        return make_pipeline(TfidfVectorizer(preprocessor=clean_text), LogisticRegression(max_iter=500)).fit(texts, y)
+
+    joblib.dump(
+        {
+            "category": head(labels),
+            "secondary": head(["none", "none", "payment_refund", "payment_refund", "none", "none"] * 3),
+            "urgent": head([label == "safety_conduct" for label in labels]),
+        },
+        tmp_path / "model.joblib",
     )
-    joblib.dump({"model_version": "v-test", "category_model": category, "urgent_model": urgent},
-                tmp_path / "model.joblib")
+    (tmp_path / "labels.json").write_text(
+        json.dumps({"model_version": "v-test", "category_to_team": CATEGORY_TO_TEAM}), encoding="utf-8"
+    )
 
     model = load(tmp_path)
     assert model.model_version == "v-test"

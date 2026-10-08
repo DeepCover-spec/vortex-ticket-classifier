@@ -17,7 +17,6 @@ from app.auth import authorize
 from app.config import Settings
 from app.errors import MAX_HEADER_ID, error_response, validation_error, with_request_id
 from app.jobs import JobStore, worker_loop
-from app.predictor import ticket_text
 from app.routing import finalize_prediction
 from app.validation import (
     BATCH_MAX_BYTES,
@@ -85,8 +84,9 @@ def create_app(settings: Settings | None = None, model=None) -> FastAPI:
 
     async def classify(request: Request, tickets: list[dict]) -> list[dict]:
         model = request.app.state.model
-        texts = [ticket_text(t["subject"], t["text"]) for t in tickets]
-        raw = await run_in_threadpool(model.predict, texts)
+        raw = await run_in_threadpool(
+            model.predict, [t["text"] for t in tickets], [t["subject"] for t in tickets]
+        )
         if len(raw) != len(tickets):
             raise RuntimeError("model returned a different number of predictions")
         return [finalize_prediction(t, r, model.model_version) for t, r in zip(tickets, raw)]
