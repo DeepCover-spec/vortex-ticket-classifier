@@ -1,4 +1,4 @@
-name: Keep hosted API awake
+name: Check hosted API health
 
 on:
   schedule:
@@ -8,7 +8,7 @@ on:
 permissions: {}
 
 env:
-  SERVICE_URL: ${{ vars.SERVICE_URL || 'https://vortex-ticket-classifier.onrender.com' }}
+  SERVICE_URL: ${{ vars.SERVICE_URL || 'https://vortex-ticket-classifier.up.railway.app' }}
 
 jobs:
   ping:
