@@ -62,3 +62,16 @@ To test the hosted service, set `TF_BASE_URL` to the base URL above and `TF_API_
 - **Job store:** SQLite in `/app/data`, on a Railway volume, so finished jobs survive redeploys for their 6-hour retention. Jobs that were queued or running when the service restarts are marked failed (interrupted).
 - **Secrets:** `API_KEY` is set only in the host's environment variables.
 - **Uptime:** `.github/workflows/keepalive.yml` checks `/health` every 5 minutes.
+
+## Demo
+
+The browser demo lives in `demo/` and does not run the model itself. It proxies same-origin `/ui/predict` and `/ui/batch` to the hosted API (`POST /predict` and `POST /predict/batch`). The page is `frontend/index.html`. Evaluation figures come from `frontend/metrics.json`.
+
+```bash
+pip install -r demo/requirements.txt
+export API_BASE_URL=https://vortex-ticket-classifier.up.railway.app   # PowerShell: $env:API_BASE_URL = "https://vortex-ticket-classifier.up.railway.app"
+export API_KEY=<team key from your environment>                        # PowerShell: $env:API_KEY = "<team key>"
+uvicorn demo.main:app --port 8000
+```
+
+`API_KEY` is read on the server and sent only as the `X-API-Key` header to the hosted API. Do not commit it. On Vercel, set the project Root Directory to `demo/`, then set `API_BASE_URL` and `API_KEY` in that project's environment variables. The same frontend files are copied under `demo/frontend` and `demo/public` so the deployment can serve them. `demo/` and `public/` are listed in `.dockerignore` so they stay out of the API image.

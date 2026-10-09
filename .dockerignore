@@ -8,6 +8,8 @@ tests
 training
 frontend
 spec
+demo
+public
 **/__pycache__
 .pytest_cache
 *.md
