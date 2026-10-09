@@ -1,7 +1,13 @@
-"""Demo proxy tests. They never call the hosted API and never use the real key."""
+"""Demo proxy tests. They never call the hosted API and never use the real key.
+
+The container CI job installs pytest and httpx only, then runs this suite against
+the API image. These tests need FastAPI, so they skip there.
+"""
 
 import httpx
 import pytest
+
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 
 import demo.main as demo
