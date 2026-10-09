@@ -7,9 +7,11 @@ auth (401), content type (415), size (413), JSON parse (400), field rules (422).
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from starlette.requests import ClientDisconnect
 
 from app.errors import error_response, validation_error
 
@@ -35,15 +37,37 @@ def _too_large(request: Request) -> JSONResponse:
     )
 
 
+# Answering 413 while the client is still uploading makes the server close a
+# socket with unread data, which resets the connection before the client can
+# read the response. Oversized bodies are therefore read and discarded, up to
+# this multiple of the limit, before the 413 is sent.
+DRAIN_FACTOR = 4
+
+
+async def _discard(chunks: AsyncIterator[bytes], budget: int) -> None:
+    try:
+        async for chunk in chunks:
+            budget -= len(chunk)
+            if budget <= 0:
+                return
+    except ClientDisconnect:
+        return
+
+
 async def read_limited(request: Request, limit: int) -> tuple[bytes | None, JSONResponse | None]:
+    drain_cap = limit * DRAIN_FACTOR
+    stream = request.stream()
     declared = request.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > limit:
+        if int(declared) <= drain_cap:
+            await _discard(stream, int(declared))
         return None, _too_large(request)
     chunks: list[bytes] = []
     size = 0
-    async for chunk in request.stream():
+    async for chunk in stream:
         size += len(chunk)
         if size > limit:
+            await _discard(stream, drain_cap - size)
             return None, _too_large(request)
         chunks.append(chunk)
     return b"".join(chunks), None
