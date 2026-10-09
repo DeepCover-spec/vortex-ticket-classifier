@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#070B18">
+  <title>VORTEX — Ticket Classifier</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true">
+    <video id="ambient-video" autoplay muted loop playsinline preload="auto">
+      <source src="/ambient.mp4" type="video/mp4">
+    </video>
+    <canvas id="vortex-canvas" hidden></canvas>
+    <div id="cursor-glow" class="cursor-glow"></div>
+  </div>
+  <a class="skip-link" href="#classify">Skip to ticket classification</a>
+
+  <header class="site-header">
+    <div class="shell header-bar">
+      <a class="brand" href="#overview">
+        <span class="logo" aria-hidden="true">
+          <svg class="vortex-mark" viewBox="0 0 64 64">
+            <g class="ring-spin spin-a"><ellipse cx="32" cy="32" rx="24" ry="9" fill="none" stroke="#38BDF8" stroke-width="1.6"></ellipse></g>
+            <g class="ring-spin spin-b"><ellipse cx="32" cy="32" rx="17" ry="7" fill="none" stroke="#A78BFA" stroke-width="1.5"></ellipse></g>
+            <g class="ring-spin spin-c"><ellipse cx="32" cy="32" rx="10" ry="4" fill="none" stroke="#22D3EE" stroke-width="1.4"></ellipse></g>
+            <circle class="neural-core" cx="32" cy="32" r="2.6" fill="#22D3EE"></circle>
+          </svg>
+        </span>
+        <span class="brand-text">
+          <span class="brand-name">VORTEX</span>
+          <span class="brand-sub">Ticket Classifier</span>
+        </span>
+      </a>
+
+      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+        <span class="sr-only">Menu</span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <nav id="site-nav" class="site-nav" aria-label="Page">
+        <a href="#overview">Overview</a>
+        <a href="#classify">Classify</a>
+        <a href="#batch">Batch</a>
+        <a href="#analytics">Analytics</a>
+      </nav>
+
+      <p class="status-pill" id="system-status" role="status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="system-status-label">Checking status</span>
+      </p>
+    </div>
+  </header>
+
+  <main>
+    <section id="overview" class="section hero-section">
+      <button id="motion-toggle" class="motion-toggle" type="button" aria-pressed="true">Motion on</button>
+      <div class="shell hero">
+        <div class="hero-copy">
+          <p class="eyebrow">VORTEX · Ticket Classifier</p>
+          <h1>Intelligent Ticket Classification</h1>
+          <p class="lede">
+            Automatically classify customer support tickets, route them to the right team,
+            and measure prediction confidence with a trained machine-learning model.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#classify">Classify a Ticket</a>
+            <a class="btn btn-secondary" href="#analytics">View Analytics</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <svg class="radar" viewBox="0 0 200 200">
+            <g class="radar-spin">
+              <circle class="ring ring-1" cx="100" cy="100" r="88"></circle>
+              <circle class="ring ring-2" cx="100" cy="100" r="68"></circle>
+              <circle class="ring ring-3" cx="100" cy="100" r="48"></circle>
+              <circle class="ring ring-4" cx="100" cy="100" r="30"></circle>
+              <circle class="node node-a" cx="78" cy="18" r="4.4"></circle>
+              <circle class="node node-b" cx="46" cy="146" r="3.8"></circle>
+              <circle class="node node-c" cx="160" cy="126" r="3.8"></circle>
+            </g>
+            <circle class="radar-glow" cx="100" cy="100" r="16"></circle>
+            <circle class="radar-core" cx="100" cy="100" r="7"></circle>
+          </svg>
+        </div>
+      </div>
+      <div class="shell">
+        <div id="overview-cards" class="card-grid" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section id="classify" class="section reveal-on-scroll">
+      <div class="shell">
+        <div class="section-heading">
+          <h2>Classify a Ticket</h2>
+          <p>Enter a customer support request and VORTEX will predict the most likely category and routing team.</p>
+        </div>
+        <div class="split">
+          <form id="classify-form" class="panel" novalidate>
+            <p class="meta-label" id="sample-label">Quick sample tickets</p>
+            <div class="samples" role="group" aria-labelledby="sample-label">
+              <button class="sample-chip" type="button" data-sample="password">Locked out</button>
+              <button class="sample-chip" type="button" data-sample="billing">Charged twice</button>
+              <button class="sample-chip" type="button" data-sample="delivery">Late delivery</button>
+              <button class="sample-chip" type="button" data-sample="hardware">App closes</button>
+            </div>
+            <div class="channel-row">
+              <div class="channel-field">
+                <label for="ticket-channel">Channel</label>
+                <select id="ticket-channel" name="channel">
+                  <option value="chat" selected>Chat</option>
+                  <option value="email">Email</option>
+                  <option value="call_transcript">Call transcript</option>
+                </select>
+              </div>
+              <div class="channel-field" id="subject-wrap" hidden>
+                <label for="ticket-subject">Subject</label>
+                <input id="ticket-subject" name="subject" type="text" maxlength="500" autocomplete="off" placeholder="Email subject">
+              </div>
+            </div>
+            <label for="ticket-text">Support ticket</label>
+            <textarea
+              id="ticket-text"
+              name="ticket"
+              rows="9"
+              placeholder="Example: My account has been locked and I cannot reset my password..."
+              required
+            ></textarea>
+            <div class="field-meta">
+              <span id="ticket-count">0 characters</span>
+              <span id="classify-hint">Ctrl + Enter to classify</span>
+            </div>
+            <p id="classify-error" class="form-error" role="alert" hidden></p>
+            <div class="button-row">
+              <button id="classify-button" class="btn btn-primary" type="submit">Classify Ticket</button>
+              <button id="ticket-clear" class="btn btn-secondary" type="button">Clear</button>
+            </div>
+          </form>
+
+          <article class="panel result-panel" aria-live="polite">
+            <p class="panel-kicker">Classification result</p>
+            <div id="result-empty" class="empty-state">
+              <p>Ready when you are.</p>
+              <p>Enter a customer support ticket to see VORTEX in action.</p>
+            </div>
+            <div id="result-loading" class="loading-state" hidden>
+              <p class="pipeline-note">Visual progress</p>
+              <ol id="pipeline" class="pipeline" aria-label="Visual classification progress">
+                <li>Scanning text</li>
+                <li>Identifying intent</li>
+                <li>Mapping category</li>
+                <li>Routing team</li>
+              </ol>
+            </div>
+            <div id="result-body" hidden>
+              <div class="result-grid">
+                <div>
+                  <p class="meta-label">Category</p>
+                  <p id="result-category" class="meta-value"></p>
+                  <p class="meta-label">Secondary category</p>
+                  <p id="result-secondary" class="meta-value"></p>
+                </div>
+                <div>
+                  <p class="meta-label">Assigned team</p>
+                  <p id="result-team" class="meta-value"></p>
+                  <p id="routed-badge" class="routed" hidden><span class="pulse-dot" aria-hidden="true"></span> Routed</p>
+                  <p id="result-team-note" class="meta-note" hidden></p>
+                  <p class="meta-label">Urgency</p>
+                  <p id="result-urgent" class="meta-value"></p>
+                </div>
+              </div>
+              <dl class="result-meta">
+                <div>
+                  <dt>Ticket id</dt>
+                  <dd id="result-ticket-id"></dd>
+                </div>
+                <div>
+                  <dt>Model version</dt>
+                  <dd id="result-version"></dd>
+                </div>
+              </dl>
+              <div class="confidence-block">
+                <div class="gauge" id="confidence-gauge">
+                  <svg viewBox="0 0 140 140" role="img" aria-labelledby="confidence-caption">
+                    <title id="confidence-caption">Model confidence</title>
+                    <circle class="gauge-track" cx="70" cy="70" r="52"></circle>
+                    <circle id="gauge-value" class="gauge-value" cx="70" cy="70" r="52"></circle>
+                  </svg>
+                  <div class="gauge-readout">
+                    <span id="confidence-value">—</span>
+                    <span>Confidence</span>
+                  </div>
+                </div>
+                <div class="confidence-copy">
+                  <p class="meta-label">Model confidence</p>
+                  <p id="confidence-band" class="band-label"></p>
+                  <p class="meta-note">Confidence is the model’s score for this prediction. It is not a guarantee that the category is correct.</p>
+                </div>
+              </div>
+              <div class="button-row result-actions">
+                <button id="copy-result" class="btn btn-secondary" type="button">Copy result</button>
+                <button id="new-ticket" class="btn btn-ghost" type="button">New ticket</button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="batch" class="section reveal-on-scroll">
+      <div class="shell">
+        <div class="section-heading">
+          <h2>Batch Classification</h2>
+          <p>Classify multiple support tickets at once. Paste one ticket per line. Synchronous classification accepts 1 to 100 tickets.</p>
+        </div>
+        <form id="batch-form" class="panel" novalidate>
+          <div class="channel-field">
+            <label for="batch-channel">Channel</label>
+            <select id="batch-channel" name="channel">
+              <option value="chat" selected>Chat</option>
+              <option value="email">Email</option>
+              <option value="call_transcript">Call transcript</option>
+            </select>
+          </div>
+          <label for="batch-text">Tickets</label>
+          <div class="editor">
+            <pre id="batch-gutter" class="gutter" aria-hidden="true">1</pre>
+            <textarea
+              id="batch-text"
+              rows="8"
+              placeholder="Paste multiple tickets to begin. One ticket per line. Maximum 100 tickets."
+            ></textarea>
+          </div>
+          <div class="field-meta">
+            <span id="batch-count">Tickets detected: 0</span>
+            <span id="batch-limit" class="limit-note"></span>
+          </div>
+          <p id="batch-error" class="form-error" role="alert" hidden></p>
+          <div class="button-row">
+            <button id="batch-button" class="btn btn-primary" type="submit">Classify Batch</button>
+            <button id="batch-clear" class="btn btn-secondary" type="button">Clear</button>
+            <button id="batch-example" class="btn btn-ghost" type="button">Load 5 samples</button>
+          </div>
+        </form>
+
+        <div id="batch-results" class="panel results-wrap" hidden>
+          <div class="results-summary">
+            <p id="batch-summary"></p>
+            <p id="batch-average"></p>
+          </div>
+          <div id="batch-distribution" class="distribution" hidden></div>
+          <div class="filters" role="group" aria-label="Filter by confidence">
+            <button type="button" data-filter="all" class="is-on">All</button>
+            <button type="button" data-filter="high">High</button>
+            <button type="button" data-filter="moderate">Moderate</button>
+            <button type="button" data-filter="low">Low</button>
+          </div>
+          <div class="table-scroll">
+            <table id="batch-table">
+              <caption class="sr-only">Batch classification results</caption>
+              <thead>
+                <tr>
+                  <th scope="col"><button type="button" data-sort="index">#</button></th>
+                  <th scope="col"><button type="button" data-sort="ticket">Ticket</button></th>
+                  <th scope="col"><button type="button" data-sort="category">Category</button></th>
+                  <th scope="col"><button type="button" data-sort="secondary_category">Secondary</button></th>
+                  <th scope="col"><button type="button" data-sort="team">Team</button></th>
+                  <th scope="col"><button type="button" data-sort="is_urgent">Urgent</button></th>
+                  <th scope="col"><button type="button" data-sort="confidence">Confidence</button></th>
+                </tr>
+              </thead>
+              <tbody id="batch-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="panel job-note">
+          <h3>Large evaluation jobs</h3>
+          <p>
+            Jobs of 2,000 to 5,000 tickets are sent to the authenticated batch-job API used by the judges.
+            This page does not submit those jobs. It classifies up to 100 tickets and shows the category, team, urgency, and confidence returned by the hosted API.
+          </p>
+        </aside>
+      </div>
+    </section>
+
+    <section id="analytics" class="section reveal-on-scroll">
+      <div class="shell">
+        <div class="section-heading">
+          <h2>Model Performance</h2>
+          <p>Evaluation figures are loaded from the metrics file produced by training. Nothing on this page is estimated in the browser.</p>
+        </div>
+        <div id="analytics-body" class="analytics-stack" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-bar">
+      <div>
+        <p class="brand-name">VORTEX — Ticket Classifier</p>
+        <p>TensorForge 2.0 | Phase 2</p>
+      </div>
+      <p>Built for intelligent support ticket routing.</p>
+    </div>
+  </footer>
+
+  <div id="matrix-tip" class="matrix-tip" role="tooltip" hidden></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
