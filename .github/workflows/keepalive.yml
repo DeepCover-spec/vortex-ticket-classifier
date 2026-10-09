@@ -1,0 +1,29 @@
+name: Keep hosted API awake
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  SERVICE_URL: ${{ vars.SERVICE_URL || 'https://vortex-ticket-classifier.onrender.com' }}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping /health
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 60 "${SERVICE_URL%/}/health"; then
+              echo
+              exit 0
+            fi
+            echo "attempt $attempt failed, retrying in 20s"
+            sleep 20
+          done
+          echo "::error::${SERVICE_URL%/}/health did not answer"
+          exit 1
